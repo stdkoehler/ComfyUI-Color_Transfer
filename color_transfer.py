@@ -6,6 +6,8 @@ import cv2
 from .utils import EuclideanDistance, ManhattanDistance
 
 
+
+
 def ColorClustering(image, k, cluster_method):
     img_array = image.reshape((image.shape[0] * image.shape[1], 3))
 
@@ -39,10 +41,8 @@ def SwitchColors(image, detected_colors, target_colors, clustering_model, distan
     closest_colors = np.array(closest_colors)
 
     image = closest_colors[clustering_model.labels_].reshape(image.shape)
-    image = np.array(image).astype(np.float32) / 255.0
-    processedImage = torch.from_numpy(image)[None,]
     
-    return processedImage
+    return image
 
 
 class PaletteTransferNode:
@@ -78,11 +78,22 @@ class PaletteTransferNode:
 
             if color_space == "HSV":
                 img = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
-                target_colors = np.array([cv2.cvtColor(np.uint8([[color]]), cv2.COLOR_RGB2HSV)[0] for color in target_colors])
+
+                target_colors = np.array(target_colors, dtype=np.uint8).reshape(-1, 1, 3)
+                target_colors = cv2.cvtColor(target_colors, cv2.COLOR_RGB2HSV)
+                target_colors = [tuple(hsv[0]) for hsv in target_colors]
+
 
             clustered_img, detected_colors, clustering_model = ColorClustering(img, len(target_colors), cluster_method)
             processed = SwitchColors(clustered_img, detected_colors, target_colors, clustering_model, distance_method)
-            processedImages.append(processed)
+
+            if color_space == "HSV":
+                processed = cv2.cvtColor(processed, cv2.COLOR_HSV2RGB)
+            
+            processed = np.array(processed).astype(np.float32) / 255.0
+            processedImage = torch.from_numpy(processed)[None,]
+
+            processedImages.append(processedImage)
         
         output = torch.cat(processedImages, dim=0)
 
