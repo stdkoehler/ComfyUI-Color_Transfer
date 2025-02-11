@@ -52,13 +52,15 @@ class PaletteTransferNode:
             "required": {
                 "image": ("IMAGE",),
                 "target_colors": ("COLOR_LIST",),
-                "color_space": ("COLOR_SPACE",),
+                "color_space": (["RGB", "HSV", "LAB"], {'default': 'RGB'}),
                 "cluster_method": (["Kmeans","Mini batch Kmeans"], {'default': 'Kmeans'}, ),
                 "distance_method": (["Euclidean", "Manhattan"], {'default': 'Euclidean'}, )
                 }
             }
         return data_in
 
+
+    CATEGORY = "Color Transfer"
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "color_transfer"
     CATEGORY = "Palette Transfer"
@@ -76,6 +78,7 @@ class PaletteTransferNode:
 
             if color_space == "HSV":
                 img = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+                target_colors = np.array([cv2.cvtColor(np.uint8([[color]]), cv2.COLOR_RGB2HSV)[0] for color in target_colors])
 
             clustered_img, detected_colors, clustering_model = ColorClustering(img, len(target_colors), cluster_method)
             processed = SwitchColors(clustered_img, detected_colors, target_colors, clustering_model, distance_method)
@@ -92,13 +95,13 @@ class ColorPaletteNode:
         return {
             "required": {
                 "color_palette": ("STRING", {'default': '[(30, 32, 30), (60, 61, 55), (105, 117, 101), (236, 223, 204)]', 'multiline': True}),
-                "color_space": (["RGB", "HSV", "LAB"], {'default': 'RGB'}),
             },
         }
 
-    RETURN_TYPES = ("COLOR_LIST", "COLOR_SPACE")
-    RETURN_NAMES = ("Color palette", "Color space")
+    CATEGORY = "Color Transfer"
+    RETURN_TYPES = ("COLOR_LIST", )
+    RETURN_NAMES = ("Color palette", )
     FUNCTION = "color_list"
 
-    def color_list(self, color_palette, color_space):
-        return (ast.literal_eval(color_palette), color_space, )
+    def color_list(self, color_palette):
+        return (ast.literal_eval(color_palette), )
