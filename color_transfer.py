@@ -2,14 +2,7 @@ import numpy as np
 from sklearn.cluster import KMeans, MiniBatchKMeans
 import torch
 import ast
-
-
-def EuclideanDistance(detected_colors, target_colors):
-    return np.linalg.norm(detected_colors - target_colors, axis=1)
-
-
-def ManhattanDistance(detected_colors, target_colors):
-    return np.sum(np.abs(detected_colors - target_colors), axis=1)
+from .utils import EuclideanDistance, ManhattanDistance
 
 
 def ColorClustering(image, k, cluster_method):
@@ -57,7 +50,8 @@ class PaletteTransferNode:
         data_in = {
             "required": {
                 "image": ("IMAGE",),
-                "target_colors": ("COLORS",),
+                "target_colors": ("COLOR_LIST",),
+                "color_space": ("COLOR_SPACE",),
                 "cluster_method": (["Kmeans","Mini batch Kmeans"], {'default': 'Kmeans'}, ),
                 "distance_method": (["Euclidean", "Manhattan"], {'default': 'Euclidean'}, )
                 }
@@ -69,7 +63,7 @@ class PaletteTransferNode:
     CATEGORY = "Palette Transfer"
 
 
-    def color_transfer(self, image, target_colors, cluster_method, distance_method):
+    def color_transfer(self, image, target_colors, color_space, cluster_method, distance_method):
 
         if len(target_colors) == 0:
             return (image,)
@@ -93,13 +87,14 @@ class ColorPaletteNode:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "color_palette": ("STRING", {'default': '', 'multiline': True})
+                "color_palette": ("STRING", {'default': '[(30, 32, 30), (60, 61, 55), (105, 117, 101), (236, 223, 204)]', 'multiline': True}),
+                "color_space": (["RGB", "HSV", "LAB"], {'default': 'RGB'}),
             },
         }
 
-    RETURN_TYPES = ("COLORS", )
-    RETURN_NAMES = ("Color palette", )
+    RETURN_TYPES = ("COLOR_LIST", "COLOR_SPACE")
+    RETURN_NAMES = ("Color palette", "Color space")
     FUNCTION = "color_list"
 
-    def color_list(self, color_palette):
-        return (ast.literal_eval(color_palette), )
+    def color_list(self, color_palette, color_space):
+        return (ast.literal_eval(color_palette), color_space, )
