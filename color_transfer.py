@@ -2,6 +2,7 @@ import numpy as np
 from sklearn.cluster import KMeans, MiniBatchKMeans
 import torch
 import ast
+import cv2
 from .utils import EuclideanDistance, ManhattanDistance
 
 
@@ -72,6 +73,9 @@ class PaletteTransferNode:
 
         for image in image:
             img = 255. * image.cpu().numpy()
+
+            if color_space == "HSV":
+                img = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
 
             clustered_img, detected_colors, clustering_model = ColorClustering(img, len(target_colors), cluster_method)
             processed = SwitchColors(clustered_img, detected_colors, target_colors, clustering_model, distance_method)
