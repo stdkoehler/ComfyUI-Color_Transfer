@@ -3,7 +3,7 @@ from sklearn.cluster import KMeans, MiniBatchKMeans
 import torch
 import ast
 import cv2
-from .utils import EuclideanDistance, ManhattanDistance
+from .utils import EuclideanDistance, ManhattanDistance, CosineSimilarity
 
 
 
@@ -28,7 +28,8 @@ def SwitchColors(image, detected_colors, target_colors, clustering_model, distan
 
     distance_methods = {
     "Euclidean": EuclideanDistance,
-    "Manhattan": ManhattanDistance
+    "Manhattan": ManhattanDistance,
+    "HSV_Similarity": CosineSimilarity
     }
 
     distance_method = distance_methods.get(distance_method)
@@ -54,7 +55,7 @@ class PaletteTransferNode:
                 "target_colors": ("COLOR_LIST",),
                 "color_space": (["RGB", "HSV", "LAB"], {'default': 'RGB'}),
                 "cluster_method": (["Kmeans","Mini batch Kmeans"], {'default': 'Kmeans'}, ),
-                "distance_method": (["Euclidean", "Manhattan"], {'default': 'Euclidean'}, )
+                "distance_method": (["Euclidean", "Manhattan", "CosineSimilarity"], {'default': 'Euclidean'}, )
                 }
             }
         return data_in
