@@ -1,16 +1,16 @@
 import numpy as np
 
 
-def EuclideanDistance(detected_colors, target_colors):
-    return np.linalg.norm(detected_colors - target_colors, axis=1)
+def EuclideanDistance(detected_color, target_colors):
+    return np.linalg.norm(detected_color - target_colors, axis=1)
 
 
-def ManhattanDistance(detected_colors, target_colors):
-    return np.sum(np.abs(detected_colors - target_colors), axis=1)
+def ManhattanDistance(detected_color, target_colors):
+    return np.sum(np.abs(detected_color - target_colors), axis=1)
 
 
-def CosineSimilarity(detected_colors, target_colors):
-    return np.dot(detected_colors, target_colors) / (np.linalg.norm(detected_colors) * np.linalg.norm(target_colors))
+def CosineSimilarity(detected_color, target_colors):
+    return -np.dot(target_colors, detected_color) / (np.linalg.norm(detected_color) * np.linalg.norm(target_colors, axis=1))
 
 
 '''def HSV_Color_Similarity(detected_colors, target_colors):
