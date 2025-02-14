@@ -42,7 +42,7 @@ def HSV_Color_Similarity(detected_color, target_colors):
     similarities = dot_products / (v1_norm * v2_norms)
     
     return -similarities
-
+    
 
 def Blur(image, kernel_size):
     return cv2.medianBlur(image.astype(np.uint8), kernel_size)

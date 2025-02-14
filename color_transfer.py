@@ -84,14 +84,21 @@ class PaletteTransferNode:
                 target_colors = np.array(target_colors, dtype=np.uint8).reshape(-1, 1, 3)
                 target_colors = cv2.cvtColor(target_colors, cv2.COLOR_RGB2HSV)
                 target_colors = [tuple(hsv[0]) for hsv in target_colors]
+            if color_space == "LAB":
+                img = cv2.cvtColor(img, cv2.COLOR_RGB2LAB)
 
+                target_colors = np.array(target_colors, dtype=np.uint8).reshape(-1, 1, 3)
+                target_colors = cv2.cvtColor(target_colors, cv2.COLOR_RGB2LAB)
+                target_colors = [tuple(lab[0]) for lab in target_colors]
 
             clustered_img, detected_colors, clustering_model = ColorClustering(img, len(target_colors), cluster_method)
             processed = SwitchColors(clustered_img, detected_colors, target_colors, clustering_model, distance_method)
 
             if color_space == "HSV":
                 processed = cv2.cvtColor(processed, cv2.COLOR_HSV2RGB)
-            
+            if color_space == "LAB":
+                processed = cv2.cvtColor(processed, cv2.COLOR_LAB2RGB)
+
             if gaussian_blur:
                 processed = Blur(processed, gaussian_blur)
 
