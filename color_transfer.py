@@ -57,11 +57,10 @@ class PaletteTransferNode:
                 "color_space": (["RGB", "HSV", "LAB"], {'default': 'RGB'}),
                 "cluster_method": (["Kmeans","Mini batch Kmeans"], {'default': 'Kmeans'}, ),
                 "distance_method": (["Euclidean", "Manhattan", "Cosine Similarity", "HSV Distance"], {'default': 'Euclidean'}, ),
-                "gaussian_blur": ("BOOLEAN", {'default': False}),
+                "gaussian_blur": ("INT", {'default': 3, 'min': 0, 'max': 27, 'step': 2}),
                 }
             }
         return data_in
-    """("INT", {"default": 2100})"""
 
     CATEGORY = "Color Transfer"
     RETURN_TYPES = ("IMAGE",)
@@ -94,7 +93,7 @@ class PaletteTransferNode:
                 processed = cv2.cvtColor(processed, cv2.COLOR_HSV2RGB)
             
             if gaussian_blur:
-                processed = Blur(processed, 3)
+                processed = Blur(processed, gaussian_blur)
 
             processed = np.array(processed).astype(np.float32) / 255.0
             processedImage = torch.from_numpy(processed)[None,]
