@@ -3,7 +3,7 @@ from sklearn.cluster import KMeans, MiniBatchKMeans
 import torch
 import ast
 import cv2
-from .utils import EuclideanDistance, ManhattanDistance, CosineSimilarity
+from .utils import EuclideanDistance, ManhattanDistance, CosineSimilarity, HSV_Color_Similarity, Blur
 
 
 
@@ -29,7 +29,8 @@ def SwitchColors(image, detected_colors, target_colors, clustering_model, distan
     distance_methods = {
     "Euclidean": EuclideanDistance,
     "Manhattan": ManhattanDistance,
-    "Cosine Similarity": CosineSimilarity
+    "Cosine Similarity": CosineSimilarity,
+    "HSV Distance": HSV_Color_Similarity
     }
 
     distance_method = distance_methods.get(distance_method)
@@ -55,11 +56,12 @@ class PaletteTransferNode:
                 "target_colors": ("COLOR_LIST",),
                 "color_space": (["RGB", "HSV", "LAB"], {'default': 'RGB'}),
                 "cluster_method": (["Kmeans","Mini batch Kmeans"], {'default': 'Kmeans'}, ),
-                "distance_method": (["Euclidean", "Manhattan", "Cosine Similarity"], {'default': 'Euclidean'}, )
+                "distance_method": (["Euclidean", "Manhattan", "Cosine Similarity", "HSV Distance"], {'default': 'Euclidean'}, ),
+                "gaussian_blur": ("BOOLEAN", {'default': False}),
                 }
             }
         return data_in
-
+    """("INT", {"default": 2100})"""
 
     CATEGORY = "Color Transfer"
     RETURN_TYPES = ("IMAGE",)
@@ -67,7 +69,7 @@ class PaletteTransferNode:
     CATEGORY = "Palette Transfer"
 
 
-    def color_transfer(self, image, target_colors, color_space, cluster_method, distance_method):
+    def color_transfer(self, image, target_colors, color_space, cluster_method, distance_method, gaussian_blur):
 
         if len(target_colors) == 0:
             return (image,)
@@ -91,6 +93,9 @@ class PaletteTransferNode:
             if color_space == "HSV":
                 processed = cv2.cvtColor(processed, cv2.COLOR_HSV2RGB)
             
+            if gaussian_blur:
+                processed = Blur(processed, 3)
+
             processed = np.array(processed).astype(np.float32) / 255.0
             processedImage = torch.from_numpy(processed)[None,]
 
