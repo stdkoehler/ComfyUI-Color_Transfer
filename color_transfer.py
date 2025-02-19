@@ -3,8 +3,8 @@ from sklearn.cluster import KMeans, MiniBatchKMeans
 import torch
 import ast
 import cv2
-from .utils import EuclideanDistance, ManhattanDistance, CosineSimilarity, HSV_Color_Similarity, Blur
-
+from .utils import EuclideanDistance, ManhattanDistance, CosineSimilarity, Blur
+from .utils import HSVColorSimilarity, RGBWeightedDistance, RGBWeightedSimilarity
 
 
 
@@ -30,7 +30,9 @@ def SwitchColors(image, detected_colors, target_colors, clustering_model, distan
     "Euclidean": EuclideanDistance,
     "Manhattan": ManhattanDistance,
     "Cosine Similarity": CosineSimilarity,
-    "HSV Distance": HSV_Color_Similarity
+    "HSV Distance": HSVColorSimilarity,
+    "RGB Weighted Distance": RGBWeightedDistance,
+    "RGB Weighted Similarity": RGBWeightedSimilarity
     }
 
     distance_method = distance_methods.get(distance_method)
@@ -56,7 +58,7 @@ class PaletteTransferNode:
                 "target_colors": ("COLOR_LIST",),
                 "color_space": (["RGB", "HSV", "LAB"], {'default': 'RGB'}),
                 "cluster_method": (["Kmeans","Mini batch Kmeans"], {'default': 'Kmeans'}, ),
-                "distance_method": (["Euclidean", "Manhattan", "Cosine Similarity", "HSV Distance"], {'default': 'Euclidean'}, ),
+                "distance_method": (["Euclidean", "Manhattan", "Cosine Similarity", "HSV Distance", "RGB Weighted Distance", "RGB Weighted Similarity"], {'default': 'Euclidean'}, ),
                 "gaussian_blur": ("INT", {'default': 3, 'min': 0, 'max': 27, 'step': 2}),
                 }
             }

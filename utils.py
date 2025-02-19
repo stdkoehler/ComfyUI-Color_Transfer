@@ -14,7 +14,35 @@ def CosineSimilarity(detected_color, target_colors):
     return -np.dot(target_colors, detected_color) / (np.linalg.norm(detected_color) * np.linalg.norm(target_colors, axis=1))
 
 
-def HSV_Color_Similarity(detected_color, target_colors):
+def RGBWeightedDistance(detected_color, target_colors):
+    detected_color = np.array(detected_color)
+    target_colors = np.array(target_colors)
+
+    weights = np.array([0.299, 0.587, 0.114])
+
+    weighted_detected_color = np.dot(detected_color, weights)
+    weighted_target_colors = np.dot(target_colors, weights)
+
+    return np.abs(weighted_detected_color - weighted_target_colors)
+
+
+def RGBWeightedSimilarity(detected_color, target_colors):
+    detected_color = np.array(detected_color)
+    target_colors = np.array(target_colors)
+
+    weights = np.array([0.299, 0.587, 0.114])
+
+    weighted_detected_color = np.dot(detected_color, weights)
+    weighted_target_colors = np.dot(target_colors, weights)
+
+    dot_products = np.dot(weighted_detected_color, weighted_target_colors)
+    norm1 = np.linalg.norm(weighted_detected_color)
+    norm2 = np.linalg.norm(weighted_target_colors)
+
+    return -dot_products / (norm1 * norm2)
+
+
+def HSVColorSimilarity(detected_color, target_colors):
     detected_color = np.array(detected_color)
     target_colors = np.array(target_colors)
     
