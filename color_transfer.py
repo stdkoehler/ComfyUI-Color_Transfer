@@ -143,9 +143,9 @@ class PaletteTransferNode:
         color_matcher = ColorMatcher(distance_method)
         image_processor = ImagePostProcessor(gaussian_blur)
 
-        for img in image:
+        for img_tensor in image:
             # Prepare image
-            img = 255. * img.cpu().numpy()
+            img = 255. * img_tensor.cpu().numpy()
             
             # Convert color space
             converted_img, converted_colors = converter.convert_to_target_space(img, target_colors, color_space)
