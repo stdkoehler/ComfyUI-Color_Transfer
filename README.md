@@ -2,7 +2,7 @@
 
 Postprocessing nodes that implement color palette transfer in images. It replaces the dominant colors in an image with a target color palette.
 
-## Prevention of import error
+## Prevention/troubleshooting of import error
 
 To avoid import issues install python package using CLI ```pip install scikit-learn```.
 
