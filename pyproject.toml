@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-color_transfer"
 description = "Implementation of color transfer using KMeans algorithm"
-version = "1.0.0"
+version = "1.0.1"
 license = {file = "LICENSE"}
 
 [project.urls]
