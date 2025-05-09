@@ -6,12 +6,9 @@ import ast
 import cv2
 import ot
 
-from PIL import Image
 from sklearn.cluster import KMeans, MiniBatchKMeans
 from scipy.spatial import Delaunay
 from skimage import color
-from scipy.spatial.distance import cdist
-from scipy.linalg import solve
 from scipy.interpolate import Rbf
 
 from comfy.comfy_types import IO, ComfyNodeABC
@@ -23,7 +20,7 @@ from .utils import (
     HSVColorSimilarity,
     RGBWeightedDistance,
     RGBWeightedSimilarity,
-    Blur
+    Blur,
 )
 
 
@@ -38,8 +35,8 @@ class PaletteExtension:
         # add black and white to the base palette
         if extend_bw:
             base_palette = set(base_palette)
-            base_palette.add((0,0,0))
-            base_palette.add((255,255,255))
+            base_palette.add((0, 0, 0))
+            base_palette.add((255, 255, 255))
 
         palette = np.array(list(base_palette), dtype=float)
 
@@ -79,8 +76,8 @@ class PaletteExtension:
         """
         # add black and white to the base palette
         base_palette = set(base_palette)
-        base_palette.add((0,0,0))
-        base_palette.add((255,255,255))
+        base_palette.add((0, 0, 0))
+        base_palette.add((255, 255, 255))
 
         palette = np.array(list(base_palette), dtype=float)
 
@@ -92,16 +89,16 @@ class PaletteExtension:
                 for simplex in tri.simplices:
                     # add all edges of the simplex
                     for i in range(len(simplex)):
-                        for j in range(i+1, len(simplex)):
+                        for j in range(i + 1, len(simplex)):
                             a, b = simplex[i], simplex[j]
                             edges.add(tuple(sorted((a, b))))
             else:
                 # fallback to all pairs
                 idxs = range(len(palette))
-                edges = set(tuple(sorted((i,j))) for i in idxs for j in idxs if i<j)
+                edges = set(tuple(sorted((i, j))) for i in idxs for j in idxs if i < j)
 
             new_colors = []
-            t = np.linspace(0, 1, points+2)[1:-1][:, None]  # shape (points,1)
+            t = np.linspace(0, 1, points + 2)[1:-1][:, None]  # shape (points,1)
 
             for i, j in edges:
                 c1, c2 = palette[i], palette[j]
@@ -116,6 +113,7 @@ class PaletteExtension:
 
         return [tuple(c.astype(int)) for c in palette]
 
+
 class ColorSpaceConvert:
     @staticmethod
     def convert_to_target_space(image, target_colors, color_space):
@@ -125,7 +123,7 @@ class ColorSpaceConvert:
 
         conversion_map = {
             "HSV": (cv2.COLOR_RGB2HSV, cv2.COLOR_HSV2RGB),
-            "LAB": (cv2.COLOR_RGB2LAB, cv2.COLOR_LAB2RGB)
+            "LAB": (cv2.COLOR_RGB2LAB, cv2.COLOR_LAB2RGB),
         }
 
         forward_conversion, _ = conversion_map[color_space]
@@ -144,10 +142,7 @@ class ColorSpaceConvert:
         if color_space == "RGB":
             return image
 
-        conversion_map = {
-            "HSV": cv2.COLOR_HSV2RGB,
-            "LAB": cv2.COLOR_LAB2RGB
-        }
+        conversion_map = {"HSV": cv2.COLOR_HSV2RGB, "LAB": cv2.COLOR_LAB2RGB}
 
         return cv2.cvtColor(image, conversion_map[color_space])
 
@@ -156,20 +151,20 @@ class ColorClustering:
     def __init__(self, cluster_method):
         self.clustering_methods = {
             "Kmeans": KMeans,
-            "Mini batch Kmeans": MiniBatchKMeans
+            "Mini batch Kmeans": MiniBatchKMeans,
         }
         self.method = self.clustering_methods[cluster_method]
 
     def cluster_colors(self, image, k):
         """Perform color clustering on the image."""
         img_array = image.reshape((-1, 3))
-        clustering_model = self.method(n_clusters=k, n_init='auto')
+        clustering_model = self.method(n_clusters=k, n_init="auto")
         clustering_model.fit(img_array)
 
         return {
-            'image': image,
-            'main_colors': clustering_model.cluster_centers_.astype(int),
-            'model': clustering_model
+            "image": image,
+            "main_colors": clustering_model.cluster_centers_.astype(int),
+            "model": clustering_model,
         }
 
 
@@ -181,11 +176,13 @@ class ColorMatcher:
             "Cosine Similarity": CosineSimilarity,
             "HSV Distance": HSVColorSimilarity,
             "RGB Weighted Distance": RGBWeightedDistance,
-            "RGB Weighted Similarity": RGBWeightedSimilarity
+            "RGB Weighted Similarity": RGBWeightedSimilarity,
         }
         self.distance_func = self.distance_methods[distance_method]
 
-    def match_colors(self, detected_colors, target_colors, clustering_model, image_shape):
+    def match_colors(
+        self, detected_colors, target_colors, clustering_model, image_shape
+    ):
         """Match detected colors with target colors using the specified distance method."""
         closest_colors = []
 
@@ -211,7 +208,10 @@ class ImagePostProcessor:
 
         return processed / 255.0
 
-def process_image_with_palette(image, target_colors, color_space, cluster_method, distance_method, gaussian_blur):
+
+def process_image_with_palette(
+    image, target_colors, color_space, cluster_method, distance_method, gaussian_blur
+):
     """
     Shared function to process an image with the given parameters.
     """
@@ -225,20 +225,24 @@ def process_image_with_palette(image, target_colors, color_space, cluster_method
 
     for img_tensor in image:
         # Prepare image
-        img = 255. * img_tensor.cpu().numpy()
+        img = 255.0 * img_tensor.cpu().numpy()
 
         # Convert color space
-        converted_img, converted_colors = converter.convert_to_target_space(img, target_colors, color_space)
+        converted_img, converted_colors = converter.convert_to_target_space(
+            img, target_colors, color_space
+        )
 
         # Perform clustering
-        clustering_result = clustering_engine.cluster_colors(converted_img, len(target_colors))
+        clustering_result = clustering_engine.cluster_colors(
+            converted_img, len(target_colors)
+        )
 
         # Match colors
         processed = color_matcher.match_colors(
-            clustering_result['main_colors'],
+            clustering_result["main_colors"],
             converted_colors,
-            clustering_result['model'],
-            converted_img.shape
+            clustering_result["model"],
+            converted_img.shape,
         )
 
         # Convert back to RGB
@@ -252,6 +256,7 @@ def process_image_with_palette(image, target_colors, color_space, cluster_method
 
     return torch.cat(processedImages, dim=0)
 
+
 class ReferenceTransferReinhard(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(cls):
@@ -259,8 +264,8 @@ class ReferenceTransferReinhard(ComfyNodeABC):
             "required": {
                 "image": (IO.IMAGE,),
                 "image_reference": (IO.IMAGE,),
-                }
             }
+        }
         return data_in
 
     RETURN_TYPES = (IO.IMAGE,)
@@ -277,27 +282,26 @@ class ReferenceTransferReinhard(ComfyNodeABC):
             # Combine all N images into one big image for statistics calculation
             target = np.concatenate([target[i] for i in range(target.shape[0])], axis=0)
 
-
         for img_tensor in image:
             source = img_tensor.cpu().numpy()
-
 
             # Convert to Lab
             source_lab = color.rgb2lab(source)
             target_lab = color.rgb2lab(target)
 
             # Compute mean and std of each channel
-            s_mean, s_std = source_lab.mean(axis=(0,1)), source_lab.std(axis=(0,1))
-            t_mean, t_std = target_lab.mean(axis=(0,1)), target_lab.std(axis=(0,1))
-
+            s_mean, s_std = source_lab.mean(axis=(0, 1)), source_lab.std(axis=(0, 1))
+            t_mean, t_std = target_lab.mean(axis=(0, 1)), target_lab.std(axis=(0, 1))
 
             # Transfer color
             result_lab = (source_lab - s_mean) / s_std * t_std + t_mean
             result_rgb = np.clip(color.lab2rgb(result_lab), 0, 1)
 
             # Convert back to ComfyUI format
-            #result_array = (result_rgb).astype(np.uint8)
-            result_tensor = torch.from_numpy(result_rgb).unsqueeze(0)  # Add batch dimension
+            # result_array = (result_rgb).astype(np.uint8)
+            result_tensor = torch.from_numpy(result_rgb).unsqueeze(
+                0
+            )  # Add batch dimension
 
             processed_images.append(result_tensor)
 
@@ -311,10 +315,29 @@ class PaletteOptimalTransportTransfer(ComfyNodeABC):
             "required": {
                 "image": (IO.IMAGE,),
                 "target_colors": ("COLOR_LIST",),
-                "palette_extension_method": (["Dense", "Edge", "None"], {'default': 'None'}),
-                "palette_extension_points": (IO.INT, {'min': 2, 'max': 20, 'step': 1, 'default': 5,}),
-                "blend_mode": (["original", "grayscale"], {'default': 'original'}),
-                "blend_ratio": (IO.FLOAT, {'min': 0, 'max': 1, 'step': 0.1, 'default': 0.5,}),
+                "palette_extension_method": (
+                    ["Dense", "Edge", "None"],
+                    {"default": "None"},
+                ),
+                "palette_extension_points": (
+                    IO.INT,
+                    {
+                        "min": 2,
+                        "max": 20,
+                        "step": 1,
+                        "default": 5,
+                    },
+                ),
+                "blend_mode": (["original", "grayscale"], {"default": "original"}),
+                "blend_ratio": (
+                    IO.FLOAT,
+                    {
+                        "min": 0,
+                        "max": 1,
+                        "step": 0.1,
+                        "default": 0.5,
+                    },
+                ),
             }
         }
         return data_in
@@ -323,12 +346,24 @@ class PaletteOptimalTransportTransfer(ComfyNodeABC):
     FUNCTION = "color_transfer"
     CATEGORY = "Color Transfer/Palette Transfer"
 
-    def color_transfer(self, image, target_colors, palette_extension_method, palette_extension_points, blend_mode, blend_ratio):
+    def color_transfer(
+        self,
+        image,
+        target_colors,
+        palette_extension_method,
+        palette_extension_points,
+        blend_mode,
+        blend_ratio,
+    ):
 
         if palette_extension_method == "Dense":
-            target_colors = PaletteExtension.dense_palette(target_colors, points=palette_extension_points)
+            target_colors = PaletteExtension.dense_palette(
+                target_colors, points=palette_extension_points
+            )
         elif palette_extension_method == "Edge":
-            target_colors = PaletteExtension.edge_based_palette(target_colors, points=palette_extension_points)
+            target_colors = PaletteExtension.edge_based_palette(
+                target_colors, points=palette_extension_points
+            )
 
         palette = np.array(target_colors, dtype=np.float32) / 255.0
         n_palette = palette.shape[0]
@@ -351,24 +386,35 @@ class PaletteOptimalTransportTransfer(ComfyNodeABC):
             source_weights = np.bincount(pixel_labels) / len(pixel_labels)
 
             # Cost matrix (DO NOT normalize)
-            cost_matrix = ot.dist(source_centroids, palette, metric='euclidean') ** 2
+            cost_matrix = ot.dist(source_centroids, palette, metric="euclidean") ** 2
 
             # Compute OT transport plan
-            transport_plan = ot.sinkhorn(source_weights, palette_weights, cost_matrix, reg=1e-2, numItermax=100000)
+            transport_plan = ot.sinkhorn(
+                source_weights,
+                palette_weights,
+                cost_matrix,
+                reg=1e-2,
+                numItermax=100000,
+            )
 
             # Barycentric mapping (normalize per row)
-            mapped_centroids = np.dot(transport_plan, palette) / np.sum(transport_plan, axis=1, keepdims=True)
+            mapped_centroids = np.dot(transport_plan, palette) / np.sum(
+                transport_plan, axis=1, keepdims=True
+            )
 
             if blend_mode == "original":
                 # Blend between original and mapped colors
-                recolored_pixels = (1 - blend_ratio) * pixels + blend_ratio * mapped_centroids[pixel_labels]
+                recolored_pixels = (
+                    1 - blend_ratio
+                ) * pixels + blend_ratio * mapped_centroids[pixel_labels]
             elif blend_mode == "grayscale":
                 gray = color.rgb2gray(source)
-                gray_rgb = np.stack([gray]*3, axis=-1)
+                gray_rgb = np.stack([gray] * 3, axis=-1)
                 gray_pixels = gray_rgb.reshape(-1, 3)
                 # Blend between original and mapped colors
-                recolored_pixels = (1 - blend_ratio) * gray_pixels + blend_ratio * mapped_centroids[pixel_labels]
-
+                recolored_pixels = (
+                    1 - blend_ratio
+                ) * gray_pixels + blend_ratio * mapped_centroids[pixel_labels]
 
             recolored_image = recolored_pixels.reshape(h, w, 3)
 
@@ -378,7 +424,6 @@ class PaletteOptimalTransportTransfer(ComfyNodeABC):
         return (torch.cat(processed_images, dim=0),)
 
 
-
 class PaletteRbfTransfer(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(cls):
@@ -386,8 +431,14 @@ class PaletteRbfTransfer(ComfyNodeABC):
             "required": {
                 "image": (IO.IMAGE,),
                 "target_colors": ("COLOR_LIST",),
-                "rbf_function": (["thin_plate", "multiquadric", "inverse", "gaussian"], {'default': 'gaussian'}),
-                "epsilon": (IO.FLOAT, {'min': 0.01, 'max': 100, 'step': 0.1, 'default': 1.0}),
+                "rbf_function": (
+                    ["thin_plate", "multiquadric", "inverse", "gaussian"],
+                    {"default": "gaussian"},
+                ),
+                "epsilon": (
+                    IO.FLOAT,
+                    {"min": 0.01, "max": 100, "step": 0.1, "default": 1.0},
+                ),
             }
         }
         return data_in
@@ -411,7 +462,7 @@ class PaletteRbfTransfer(ComfyNodeABC):
         """
         # Extract R, G, B channels from the palette
 
-        palette = np.array(target_colors, dtype=np.float32)/255
+        palette = np.array(target_colors, dtype=np.float32) / 255
         r, g, b = palette[:, 0], palette[:, 1], palette[:, 2]
 
         # Create RBF interpolators for each channel
@@ -440,7 +491,6 @@ class PaletteRbfTransfer(ComfyNodeABC):
 
             processed_images.append(result_tensor)
 
-
         return (torch.cat(processed_images, dim=0),)
 
 
@@ -451,11 +501,27 @@ class PaletteSoftTransfer(ComfyNodeABC):
             "required": {
                 "image": (IO.IMAGE,),
                 "target_colors": ("COLOR_LIST",),
-                "blend_mode": (["original", "grayscale"], {'default': 'original'}),
-                "blend_ratio": (IO.FLOAT, {'min': 0, 'max': 1, 'step': 0.1, 'default': 0.5,}),
-                "softness": (IO.FLOAT, {'min': 0, 'max': 20, 'step': 0.1, 'default': 1,}),
-                }
+                "blend_mode": (["original", "grayscale"], {"default": "original"}),
+                "blend_ratio": (
+                    IO.FLOAT,
+                    {
+                        "min": 0,
+                        "max": 1,
+                        "step": 0.1,
+                        "default": 0.5,
+                    },
+                ),
+                "softness": (
+                    IO.FLOAT,
+                    {
+                        "min": 0,
+                        "max": 20,
+                        "step": 0.1,
+                        "default": 1,
+                    },
+                ),
             }
+        }
         return data_in
 
     RETURN_TYPES = (IO.IMAGE,)
@@ -480,27 +546,33 @@ class PaletteSoftTransfer(ComfyNodeABC):
 
             # Convert image + palette to Lab
             img_lab = color.rgb2lab(source)
-            palette_lab = np.array([color.rgb2lab(np.array([[c]]) / 255.0)[0,0] for c in target_colors])
+            palette_lab = np.array(
+                [color.rgb2lab(np.array([[c]]) / 255.0)[0, 0] for c in target_colors]
+            )
 
             # Flatten image to pixels
             pixels = img_lab.reshape(-1, 3)
 
             # Compute distances to each palette color (Euclidean in Lab space)
-            dists = np.array([np.linalg.norm(pixels - p, axis=1) for p in palette_lab])  # shape: (N_colors, N_pixels)
+            dists = np.array(
+                [np.linalg.norm(pixels - p, axis=1) for p in palette_lab]
+            )  # shape: (N_colors, N_pixels)
 
             # Convert distances to soft weights (inverse distance weighting)
             weights = np.exp(-softness * dists)
             weights /= weights.sum(axis=0)  # normalize to sum=1
 
             # Compute weighted average color for each pixel
-            projected = np.tensordot(weights.T, palette_lab, axes=(1,0))  # shape: (N_pixels, 3)
+            projected = np.tensordot(
+                weights.T, palette_lab, axes=(1, 0)
+            )  # shape: (N_pixels, 3)
 
             if blend_mode == "original":
                 # Blend between original and projected colors
                 blended = (1 - blend_ratio) * pixels + blend_ratio * projected
             elif blend_mode == "grayscale":
                 gray = color.rgb2gray(source)  # shape: (H, W)
-                gray_rgb = np.stack([gray]*3, axis=-1)  # shape: (H, W, 3)
+                gray_rgb = np.stack([gray] * 3, axis=-1)  # shape: (H, W, 3)
                 # Convert grayscale RGB to Lab (so all blending happens in Lab)
                 gray_lab = color.rgb2lab(gray_rgb)
                 gray_pixels = gray_lab.reshape(-1, 3)
@@ -511,12 +583,14 @@ class PaletteSoftTransfer(ComfyNodeABC):
             blended_lab = blended.reshape(img_lab.shape)
             blended_rgb = np.clip(color.lab2rgb(blended_lab), 0, 1)
 
-            result_tensor = torch.from_numpy(blended_rgb).unsqueeze(0)  # Add batch dimension
+            result_tensor = torch.from_numpy(blended_rgb).unsqueeze(
+                0
+            )  # Add batch dimension
 
             processed_images.append(result_tensor)
 
-
         return (torch.cat(processed_images, dim=0),)
+
 
 class PaletteTransferReinhard(ComfyNodeABC):
     @classmethod
@@ -525,8 +599,8 @@ class PaletteTransferReinhard(ComfyNodeABC):
             "required": {
                 "image": (IO.IMAGE,),
                 "target_colors": ("COLOR_LIST",),
-                }
             }
+        }
         return data_in
 
     RETURN_TYPES = (IO.IMAGE,)
@@ -548,17 +622,14 @@ class PaletteTransferReinhard(ComfyNodeABC):
             img_array = np.zeros((height, width, 3), dtype=np.uint8)
 
             for i, color in enumerate(palette):
-                img_array[i * block_height: (i+1) * block_height, :] = color
+                img_array[i * block_height : (i + 1) * block_height, :] = color
 
             return img_array
 
         processed_images = []
 
-        print(image.shape)
-
         for img_tensor in image:
             source = img_tensor.cpu().numpy()
-
 
             target = create_palette_image(target_colors) / 255.0
 
@@ -567,18 +638,21 @@ class PaletteTransferReinhard(ComfyNodeABC):
             target_lab = color.rgb2lab(target)
 
             # Compute mean and std of each channel
-            s_mean, s_std = source_lab.mean(axis=(0,1)), source_lab.std(axis=(0,1))
-            t_mean, t_std = target_lab.mean(axis=(0,1)), target_lab.std(axis=(0,1))
+            s_mean, s_std = source_lab.mean(axis=(0, 1)), source_lab.std(axis=(0, 1))
+            t_mean, t_std = target_lab.mean(axis=(0, 1)), target_lab.std(axis=(0, 1))
 
             # Transfer color
             result_lab = (source_lab - s_mean) / s_std * t_std + t_mean
             result_rgb = np.clip(color.lab2rgb(result_lab), 0, 1)
 
-            result_tensor = torch.from_numpy(result_rgb).unsqueeze(0)  # Add batch dimension
+            result_tensor = torch.from_numpy(result_rgb).unsqueeze(
+                0
+            )  # Add batch dimension
 
             processed_images.append(result_tensor)
 
         return (torch.cat(processed_images, dim=0),)
+
 
 class PalleteTransferClustering(ComfyNodeABC):
     @classmethod
@@ -587,25 +661,50 @@ class PalleteTransferClustering(ComfyNodeABC):
             "required": {
                 "image": (IO.IMAGE,),
                 "target_colors": ("COLOR_LIST",),
-                "palette_extension_method": (["Dense", "Edge", "None"], {'default': 'None'}),
-                "palette_extension_points": (IO.INT, {'min': 2, 'max': 20, 'step': 1, 'default': 5,}),
-                "gaussian_blur": (IO.INT, {'default': 3, 'min': 0, 'max': 27, 'step': 1}),
-                }
+                "palette_extension_method": (
+                    ["Dense", "Edge", "None"],
+                    {"default": "None"},
+                ),
+                "palette_extension_points": (
+                    IO.INT,
+                    {
+                        "min": 2,
+                        "max": 20,
+                        "step": 1,
+                        "default": 5,
+                    },
+                ),
+                "gaussian_blur": (
+                    IO.INT,
+                    {"default": 3, "min": 0, "max": 27, "step": 1},
+                ),
             }
+        }
         return data_in
 
     RETURN_TYPES = (IO.IMAGE,)
     FUNCTION = "color_transfer"
     CATEGORY = "Color Transfer/Palette Transfer"
 
-    def color_transfer(self, image, target_colors, palette_extension_method, palette_extension_points, gaussian_blur):
+    def color_transfer(
+        self,
+        image,
+        target_colors,
+        palette_extension_method,
+        palette_extension_points,
+        gaussian_blur,
+    ):
         if len(target_colors) == 0:
             return (image,)
 
         if palette_extension_method == "Dense":
-            target_colors = PaletteExtension.dense_palette(target_colors, points=palette_extension_points)
+            target_colors = PaletteExtension.dense_palette(
+                target_colors, points=palette_extension_points
+            )
         elif palette_extension_method == "Edge":
-            target_colors = PaletteExtension.edge_based_palette(target_colors, points=palette_extension_points)
+            target_colors = PaletteExtension.edge_based_palette(
+                target_colors, points=palette_extension_points
+            )
 
         output = process_image_with_palette(
             image=image,
@@ -613,10 +712,11 @@ class PalleteTransferClustering(ComfyNodeABC):
             color_space="RGB",
             cluster_method="Mini batch Kmeans",
             distance_method="Euclidean",
-            gaussian_blur=gaussian_blur
+            gaussian_blur=gaussian_blur,
         )
 
         return (output,)
+
 
 class PaletteTransferNode(ComfyNodeABC):
     @classmethod
@@ -625,20 +725,43 @@ class PaletteTransferNode(ComfyNodeABC):
             "required": {
                 "image": (IO.IMAGE,),
                 "target_colors": ("COLOR_LIST",),
-                "color_space": (["RGB", "HSV", "LAB"], {'default': 'RGB'}),
-                "cluster_method": (["Kmeans","Mini batch Kmeans"], {'default': 'Kmeans'}, ),
-                "distance_method": (["Euclidean", "Manhattan", "Cosine Similarity", "HSV Distance", "RGB Weighted Distance", "RGB Weighted Similarity"], {'default': 'Euclidean'}, ),
-                "gaussian_blur": (IO.INT, {'default': 3, 'min': 0, 'max': 27, 'step': 1}),
-                }
+                "color_space": (["RGB", "HSV", "LAB"], {"default": "RGB"}),
+                "cluster_method": (
+                    ["Kmeans", "Mini batch Kmeans"],
+                    {"default": "Kmeans"},
+                ),
+                "distance_method": (
+                    [
+                        "Euclidean",
+                        "Manhattan",
+                        "Cosine Similarity",
+                        "HSV Distance",
+                        "RGB Weighted Distance",
+                        "RGB Weighted Similarity",
+                    ],
+                    {"default": "Euclidean"},
+                ),
+                "gaussian_blur": (
+                    IO.INT,
+                    {"default": 3, "min": 0, "max": 27, "step": 1},
+                ),
             }
+        }
         return data_in
 
     RETURN_TYPES = (IO.IMAGE,)
     FUNCTION = "color_transfer"
     CATEGORY = "Color Transfer/Palette Transfer"
 
-
-    def color_transfer(self, image, target_colors, color_space, cluster_method, distance_method, gaussian_blur):
+    def color_transfer(
+        self,
+        image,
+        target_colors,
+        color_space,
+        cluster_method,
+        distance_method,
+        gaussian_blur,
+    ):
         if len(target_colors) == 0:
             return (image,)
 
@@ -648,7 +771,7 @@ class PaletteTransferNode(ComfyNodeABC):
             color_space=color_space,
             cluster_method=cluster_method,
             distance_method=distance_method,
-            gaussian_blur=gaussian_blur
+            gaussian_blur=gaussian_blur,
         )
 
         return (output,)
@@ -659,15 +782,20 @@ class ColorPaletteNode(ComfyNodeABC):
     def INPUT_TYPES(s):
         return {
             "required": {
-                "color_palette": (IO.STRING, {'default': '[(30, 32, 30), (60, 61, 55), (105, 117, 101), (236, 223, 204)]', 'multiline': True}),
+                "color_palette": (
+                    IO.STRING,
+                    {
+                        "default": "[(30, 32, 30), (60, 61, 55), (105, 117, 101), (236, 223, 204)]",
+                        "multiline": True,
+                    },
+                ),
             },
         }
 
-
-    RETURN_TYPES = ("COLOR_LIST", )
-    RETURN_NAMES = ("Color palette", )
+    RETURN_TYPES = ("COLOR_LIST",)
+    RETURN_NAMES = ("Color palette",)
     FUNCTION = "color_list"
     CATEGORY = "Color Transfer/Palette Transfer"
 
     def color_list(self, color_palette):
-        return (ast.literal_eval(color_palette), )
+        return (ast.literal_eval(color_palette),)
