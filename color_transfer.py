@@ -203,6 +203,47 @@ class ImagePostProcessor:
 
         return processed / 255.0
 
+def process_image_with_palette(image, target_colors, color_space, cluster_method, distance_method, gaussian_blur):
+    """
+    Shared function to process an image with the given parameters.
+    """
+    processedImages = []
+
+    # Initialize components
+    converter = ColorSpaceConvert()
+    clustering_engine = ColorClustering(cluster_method)
+    color_matcher = ColorMatcher(distance_method)
+    image_processor = ImagePostProcessor(gaussian_blur)
+
+    for img_tensor in image:
+        # Prepare image
+        img = 255. * img_tensor.cpu().numpy()
+
+        # Convert color space
+        converted_img, converted_colors = converter.convert_to_target_space(img, target_colors, color_space)
+
+        # Perform clustering
+        clustering_result = clustering_engine.cluster_colors(converted_img, len(target_colors))
+
+        # Match colors
+        processed = color_matcher.match_colors(
+            clustering_result['main_colors'],
+            converted_colors,
+            clustering_result['model'],
+            converted_img.shape
+        )
+
+        # Convert back to RGB
+        processed = converter.convert_to_rgb(processed, color_space)
+
+        # Post-process
+        processed = image_processor.process_image(processed)
+        processed_tensor = torch.from_numpy(processed)[None,]
+
+        processedImages.append(processed_tensor)
+
+    return torch.cat(processedImages, dim=0)
+
 class PalleteTransferClustering(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(cls):
@@ -225,49 +266,20 @@ class PalleteTransferClustering(ComfyNodeABC):
         if len(target_colors) == 0:
             return (image,)
 
-        processedImages = []
-
         if palette_extension_method == "Dense":
             target_colors = PaletteExtension.dense_palette(target_colors, points=palette_extension_points)
         elif palette_extension_method == "Edge":
             target_colors = PaletteExtension.edge_based_palette(target_colors, points=palette_extension_points)
 
+        output = process_image_with_palette(
+            image=image,
+            target_colors=target_colors,
+            color_space="RGB",
+            cluster_method="Mini batch Kmeans",
+            distance_method="Euclidean",
+            gaussian_blur=gaussian_blur
+        )
 
-
-        # Initialize components
-        converter = ColorSpaceConvert()
-        clustering_engine = ColorClustering("Mini batch Kmeans")
-        color_matcher = ColorMatcher("Euclidean")
-        image_processor = ImagePostProcessor(gaussian_blur)
-
-        for img_tensor in image:
-            # Prepare image
-            img = 255. * img_tensor.cpu().numpy()
-
-            # Convert color space
-            converted_img, converted_colors = converter.convert_to_target_space(img, target_colors, "RGB")
-
-            # Perform clustering
-            clustering_result = clustering_engine.cluster_colors(converted_img, len(target_colors))
-
-            # Match colors
-            processed = color_matcher.match_colors(
-                clustering_result['main_colors'],
-                converted_colors,
-                clustering_result['model'],
-                converted_img.shape
-            )
-
-            # Convert back to RGB
-            processed = converter.convert_to_rgb(processed, "RGB")
-
-            # Post-process
-            processed = image_processor.process_image(processed)
-            processed_tensor = torch.from_numpy(processed)[None,]
-
-            processedImages.append(processed_tensor)
-
-        output = torch.cat(processedImages, dim=0)
         return (output,)
 
 class PaletteTransferNode(ComfyNodeABC):
@@ -294,42 +306,15 @@ class PaletteTransferNode(ComfyNodeABC):
         if len(target_colors) == 0:
             return (image,)
 
-        processedImages = []
+        output = process_image_with_palette(
+            image=image,
+            target_colors=target_colors,
+            color_space=color_space,
+            cluster_method=cluster_method,
+            distance_method=distance_method,
+            gaussian_blur=gaussian_blur
+        )
 
-        # Initialize components
-        converter = ColorSpaceConvert()
-        clustering_engine = ColorClustering(cluster_method)
-        color_matcher = ColorMatcher(distance_method)
-        image_processor = ImagePostProcessor(gaussian_blur)
-
-        for img_tensor in image:
-            # Prepare image
-            img = 255. * img_tensor.cpu().numpy()
-
-            # Convert color space
-            converted_img, converted_colors = converter.convert_to_target_space(img, target_colors, color_space)
-
-            # Perform clustering
-            clustering_result = clustering_engine.cluster_colors(converted_img, len(target_colors))
-
-            # Match colors
-            processed = color_matcher.match_colors(
-                clustering_result['main_colors'],
-                converted_colors,
-                clustering_result['model'],
-                converted_img.shape
-            )
-
-            # Convert back to RGB
-            processed = converter.convert_to_rgb(processed, color_space)
-
-            # Post-process
-            processed = image_processor.process_image(processed)
-            processed_tensor = torch.from_numpy(processed)[None,]
-
-            processedImages.append(processed_tensor)
-
-        output = torch.cat(processedImages, dim=0)
         return (output,)
 
 
