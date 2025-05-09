@@ -4,9 +4,15 @@ import numpy as np
 import torch
 import ast
 import cv2
+import ot
 
+from PIL import Image
 from sklearn.cluster import KMeans, MiniBatchKMeans
 from scipy.spatial import Delaunay
+from skimage import color
+from scipy.spatial.distance import cdist
+from scipy.linalg import solve
+from scipy.interpolate import Rbf
 
 from comfy.comfy_types import IO, ComfyNodeABC
 
@@ -20,18 +26,20 @@ from .utils import (
     Blur
 )
 
+
 class PaletteExtension:
     @staticmethod
-    def dense_palette(base_palette, points=5, iterations=2):
+    def dense_palette(base_palette, points=5, iterations=2, extend_bw=True):
         """
         Interpolate N points between each pair of colors in the base_palette.
         Do the same for the new colors generated, for a given number of iterations to
         create a dense mesh of interpolated colors.
         """
         # add black and white to the base palette
-        base_palette = set(base_palette)
-        base_palette.add((0,0,0))
-        base_palette.add((255,255,255))
+        if extend_bw:
+            base_palette = set(base_palette)
+            base_palette.add((0,0,0))
+            base_palette.add((255,255,255))
 
         palette = np.array(list(base_palette), dtype=float)
 
@@ -243,6 +251,334 @@ def process_image_with_palette(image, target_colors, color_space, cluster_method
         processedImages.append(processed_tensor)
 
     return torch.cat(processedImages, dim=0)
+
+class ColorTransferReinhard(ComfyNodeABC):
+    @classmethod
+    def INPUT_TYPES(cls):
+        data_in = {
+            "required": {
+                "image": (IO.IMAGE,),
+                "image_reference": (IO.IMAGE,),
+                }
+            }
+        return data_in
+
+    RETURN_TYPES = (IO.IMAGE,)
+    FUNCTION = "color_transfer"
+    CATEGORY = "Palette Transfer"
+
+    def color_transfer(self, image, image_reference):
+
+        processed_images = []
+
+        # Handle reference image: flatten if it's a batch
+        target = image_reference.cpu().numpy()
+        if len(target.shape) == 4:  # If shape is (N, X, Y, 3)
+            # Combine all N images into one big image for statistics calculation
+            target = np.concatenate([target[i] for i in range(target.shape[0])], axis=0)
+
+
+        for img_tensor in image:
+            source = img_tensor.cpu().numpy()
+
+
+            # Convert to Lab
+            source_lab = color.rgb2lab(source)
+            target_lab = color.rgb2lab(target)
+
+            # Compute mean and std of each channel
+            s_mean, s_std = source_lab.mean(axis=(0,1)), source_lab.std(axis=(0,1))
+            t_mean, t_std = target_lab.mean(axis=(0,1)), target_lab.std(axis=(0,1))
+
+
+            # Transfer color
+            result_lab = (source_lab - s_mean) / s_std * t_std + t_mean
+            result_rgb = np.clip(color.lab2rgb(result_lab), 0, 1)
+
+            # Convert back to ComfyUI format
+            #result_array = (result_rgb).astype(np.uint8)
+            result_tensor = torch.from_numpy(result_rgb).unsqueeze(0)  # Add batch dimension
+
+            processed_images.append(result_tensor)
+
+        return (torch.cat(processed_images, dim=0),)
+
+
+class PaletteOptimalTransportTransfer(ComfyNodeABC):
+    @classmethod
+    def INPUT_TYPES(cls):
+        data_in = {
+            "required": {
+                "image": (IO.IMAGE,),
+                "target_colors": ("COLOR_LIST",),
+                "palette_extension_method": (["Dense", "Edge", "None"], {'default': 'None'}),
+                "palette_extension_points": (IO.INT, {'min': 2, 'max': 20, 'step': 1, 'default': 5,}),
+                "blend_mode": (["original", "grayscale"], {'default': 'original'}),
+                "blend_ratio": (IO.FLOAT, {'min': 0, 'max': 1, 'step': 0.1, 'default': 0.5,}),
+            }
+        }
+        return data_in
+
+    RETURN_TYPES = (IO.IMAGE,)
+    FUNCTION = "color_transfer"
+    CATEGORY = "Palette Transfer"
+
+    def color_transfer(self, image, target_colors, palette_extension_method, palette_extension_points, blend_mode, blend_ratio):
+
+        if palette_extension_method == "Dense":
+            target_colors = PaletteExtension.dense_palette(target_colors, points=palette_extension_points)
+        elif palette_extension_method == "Edge":
+            target_colors = PaletteExtension.edge_based_palette(target_colors, points=palette_extension_points)
+
+        palette = np.array(target_colors, dtype=np.float32) / 255.0
+        n_palette = palette.shape[0]
+        palette_weights = np.ones((n_palette,)) / n_palette
+
+        processed_images = []
+
+        for img_tensor in image:
+            source = img_tensor.cpu().numpy()
+            h, w, _ = source.shape
+            pixels = source.reshape(-1, 3)
+
+            # KMeans clustering
+            n_source_colors = 1000
+            kmeans = MiniBatchKMeans(n_clusters=n_source_colors)
+            kmeans.fit(pixels)
+            source_centroids = kmeans.cluster_centers_
+            pixel_labels = kmeans.labels_
+
+            source_weights = np.bincount(pixel_labels) / len(pixel_labels)
+
+            # Cost matrix (DO NOT normalize)
+            cost_matrix = ot.dist(source_centroids, palette, metric='euclidean') ** 2
+
+            # Compute OT transport plan
+            transport_plan = ot.sinkhorn(source_weights, palette_weights, cost_matrix, reg=1e-2, numItermax=100000)
+
+            # Barycentric mapping (normalize per row)
+            mapped_centroids = np.dot(transport_plan, palette) / np.sum(transport_plan, axis=1, keepdims=True)
+
+            if blend_mode == "original":
+                # Blend between original and mapped colors
+                recolored_pixels = (1 - blend_ratio) * pixels + blend_ratio * mapped_centroids[pixel_labels]
+            elif blend_mode == "grayscale":
+                gray = color.rgb2gray(source)
+                gray_rgb = np.stack([gray]*3, axis=-1)
+                gray_pixels = gray_rgb.reshape(-1, 3)
+                # Blend between original and mapped colors
+                recolored_pixels = (1 - blend_ratio) * gray_pixels + blend_ratio * mapped_centroids[pixel_labels]
+
+
+            recolored_image = recolored_pixels.reshape(h, w, 3)
+
+            result_tensor = torch.from_numpy(recolored_image).unsqueeze(0)
+            processed_images.append(result_tensor)
+
+        return (torch.cat(processed_images, dim=0),)
+
+
+
+class PaletteRbfTransfer(ComfyNodeABC):
+    @classmethod
+    def INPUT_TYPES(cls):
+        data_in = {
+            "required": {
+                "image": (IO.IMAGE,),
+                "target_colors": ("COLOR_LIST",),
+                "rbf_function": (["thin_plate", "multiquadric", "inverse", "gaussian"], {'default': 'gaussian'}),
+                "epsilon": (IO.FLOAT, {'min': 0.01, 'max': 100, 'step': 0.1, 'default': 1.0}),
+            }
+        }
+        return data_in
+
+    RETURN_TYPES = (IO.IMAGE,)
+    FUNCTION = "color_transfer"
+    CATEGORY = "Palette Transfer"
+
+    def color_transfer(self, image, target_colors, rbf_function, epsilon):
+        """
+        Applies RBF interpolation to map image colors based on a given palette.
+
+        Parameters:
+        - image: Input image as a NumPy array in RGB format.
+        - palette: List of RGB tuples representing the target palette.
+        - rbf_function: Type of RBF ('thin_plate', 'multiquadric', 'inverse', 'gaussian', etc.).
+        - epsilon: Adjustable constant for some RBF functions.
+
+        Returns:
+        - Recolored image as a NumPy array in RGB format.
+        """
+        # Extract R, G, B channels from the palette
+
+        palette = np.array(target_colors, dtype=np.float32)/255
+        r, g, b = palette[:, 0], palette[:, 1], palette[:, 2]
+
+        # Create RBF interpolators for each channel
+        rbf_r = Rbf(r, g, b, r, function=rbf_function, epsilon=epsilon)
+        rbf_g = Rbf(r, g, b, g, function=rbf_function, epsilon=epsilon)
+        rbf_b = Rbf(r, g, b, b, function=rbf_function, epsilon=epsilon)
+
+        processed_images = []
+
+        for img_tensor in image:
+            source = img_tensor.cpu().numpy()
+            h, w, _ = source.shape
+            pixels = source.reshape(-1, 3)
+
+            # Apply RBF interpolation to each pixel
+            mapped_r = rbf_r(pixels[:, 0], pixels[:, 1], pixels[:, 2])
+            mapped_g = rbf_g(pixels[:, 0], pixels[:, 1], pixels[:, 2])
+            mapped_b = rbf_b(pixels[:, 0], pixels[:, 1], pixels[:, 2])
+
+            # Stack and reshape the mapped channels
+            mapped_pixels = np.stack((mapped_r, mapped_g, mapped_b), axis=-1)
+            mapped_pixels = np.clip(mapped_pixels, 0, 1)
+            recolored_image = mapped_pixels.reshape(h, w, 3)
+
+            result_tensor = torch.from_numpy(recolored_image).unsqueeze(0)
+
+            processed_images.append(result_tensor)
+
+
+        return (torch.cat(processed_images, dim=0),)
+
+
+class PaletteSoftTransfer(ComfyNodeABC):
+    @classmethod
+    def INPUT_TYPES(cls):
+        data_in = {
+            "required": {
+                "image": (IO.IMAGE,),
+                "target_colors": ("COLOR_LIST",),
+                "blend_mode": (["original", "grayscale"], {'default': 'original'}),
+                "blend_ratio": (IO.FLOAT, {'min': 0, 'max': 1, 'step': 0.1, 'default': 0.5,}),
+                "softness": (IO.FLOAT, {'min': 0, 'max': 20, 'step': 0.1, 'default': 1,}),
+                }
+            }
+        return data_in
+
+    RETURN_TYPES = (IO.IMAGE,)
+    FUNCTION = "color_transfer"
+    CATEGORY = "Palette Transfer"
+
+    def color_transfer(self, image, target_colors, blend_mode, blend_ratio, softness):
+        """
+        Shift image color mood towards N palette colors (soft harmonization)
+
+        palette: list of N RGB colors [(R,G,B), ...]
+        blend_ratio: how strongly to pull towards palette (0 = none, 1 = full)
+        softness: how softly weights decay (higher = sharper attraction to nearest color)
+        """
+        if len(target_colors) < 2:
+            raise ValueError("Palette must contain at least 2 colors")
+
+        processed_images = []
+
+        for img_tensor in image:
+            source = img_tensor.cpu().numpy()
+
+            # Convert image + palette to Lab
+            img_lab = color.rgb2lab(source)
+            palette_lab = np.array([color.rgb2lab(np.array([[c]]) / 255.0)[0,0] for c in target_colors])
+
+            # Flatten image to pixels
+            pixels = img_lab.reshape(-1, 3)
+
+            # Compute distances to each palette color (Euclidean in Lab space)
+            dists = np.array([np.linalg.norm(pixels - p, axis=1) for p in palette_lab])  # shape: (N_colors, N_pixels)
+
+            # Convert distances to soft weights (inverse distance weighting)
+            weights = np.exp(-softness * dists)
+            weights /= weights.sum(axis=0)  # normalize to sum=1
+
+            # Compute weighted average color for each pixel
+            projected = np.tensordot(weights.T, palette_lab, axes=(1,0))  # shape: (N_pixels, 3)
+
+            if blend_mode == "original":
+                # Blend between original and projected colors
+                blended = (1 - blend_ratio) * pixels + blend_ratio * projected
+            elif blend_mode == "grayscale":
+                gray = color.rgb2gray(source)  # shape: (H, W)
+                gray_rgb = np.stack([gray]*3, axis=-1)  # shape: (H, W, 3)
+                # Convert grayscale RGB to Lab (so all blending happens in Lab)
+                gray_lab = color.rgb2lab(gray_rgb)
+                gray_pixels = gray_lab.reshape(-1, 3)
+                # Blend between original and projected colors
+                blended = (1 - blend_ratio) * gray_pixels + blend_ratio * projected
+
+            # Reshape back and convert to RGB
+            blended_lab = blended.reshape(img_lab.shape)
+            blended_rgb = np.clip(color.lab2rgb(blended_lab), 0, 1)
+
+            result_tensor = torch.from_numpy(blended_rgb).unsqueeze(0)  # Add batch dimension
+
+            processed_images.append(result_tensor)
+
+
+        return (torch.cat(processed_images, dim=0),)
+
+class PaletteTransferReinhard(ComfyNodeABC):
+    @classmethod
+    def INPUT_TYPES(cls):
+        data_in = {
+            "required": {
+                "image": (IO.IMAGE,),
+                "target_colors": ("COLOR_LIST",),
+                }
+            }
+        return data_in
+
+    RETURN_TYPES = (IO.IMAGE,)
+    FUNCTION = "color_transfer"
+    CATEGORY = "Palette Transfer"
+
+    def color_transfer(self, image, target_colors):
+        if len(target_colors) == 0:
+            return (image,)
+
+        target_colors = PaletteExtension.dense_palette(target_colors, points=3)
+
+        def create_palette_image(palette, size=(1000, 1000)):
+            """Creates a synthetic image from a list of RGB palette colors"""
+            N = len(palette)
+            width, height = size
+            block_height = height // N
+
+            img_array = np.zeros((height, width, 3), dtype=np.uint8)
+
+            for i, color in enumerate(palette):
+                img_array[i * block_height: (i+1) * block_height, :] = color
+
+            return img_array
+
+        processed_images = []
+
+        print(image.shape)
+
+        for img_tensor in image:
+            source = img_tensor.cpu().numpy()
+
+
+            target = create_palette_image(target_colors) / 255.0
+
+            # Convert to Lab
+            source_lab = color.rgb2lab(source)
+            target_lab = color.rgb2lab(target)
+
+            # Compute mean and std of each channel
+            s_mean, s_std = source_lab.mean(axis=(0,1)), source_lab.std(axis=(0,1))
+            t_mean, t_std = target_lab.mean(axis=(0,1)), target_lab.std(axis=(0,1))
+
+            # Transfer color
+            result_lab = (source_lab - s_mean) / s_std * t_std + t_mean
+            result_rgb = np.clip(color.lab2rgb(result_lab), 0, 1)
+
+            result_tensor = torch.from_numpy(result_rgb).unsqueeze(0)  # Add batch dimension
+
+            processed_images.append(result_tensor)
+
+        return (torch.cat(processed_images, dim=0),)
 
 class PalleteTransferClustering(ComfyNodeABC):
     @classmethod
