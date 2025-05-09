@@ -252,7 +252,7 @@ def process_image_with_palette(image, target_colors, color_space, cluster_method
 
     return torch.cat(processedImages, dim=0)
 
-class ColorTransferReinhard(ComfyNodeABC):
+class ReferenceTransferReinhard(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(cls):
         data_in = {
@@ -265,7 +265,7 @@ class ColorTransferReinhard(ComfyNodeABC):
 
     RETURN_TYPES = (IO.IMAGE,)
     FUNCTION = "color_transfer"
-    CATEGORY = "Palette Transfer"
+    CATEGORY = "Color Transfer/Reference Transfer"
 
     def color_transfer(self, image, image_reference):
 
@@ -321,7 +321,7 @@ class PaletteOptimalTransportTransfer(ComfyNodeABC):
 
     RETURN_TYPES = (IO.IMAGE,)
     FUNCTION = "color_transfer"
-    CATEGORY = "Palette Transfer"
+    CATEGORY = "Color Transfer/Palette Transfer"
 
     def color_transfer(self, image, target_colors, palette_extension_method, palette_extension_points, blend_mode, blend_ratio):
 
@@ -394,7 +394,7 @@ class PaletteRbfTransfer(ComfyNodeABC):
 
     RETURN_TYPES = (IO.IMAGE,)
     FUNCTION = "color_transfer"
-    CATEGORY = "Palette Transfer"
+    CATEGORY = "Color Transfer/Palette Transfer"
 
     def color_transfer(self, image, target_colors, rbf_function, epsilon):
         """
@@ -460,7 +460,7 @@ class PaletteSoftTransfer(ComfyNodeABC):
 
     RETURN_TYPES = (IO.IMAGE,)
     FUNCTION = "color_transfer"
-    CATEGORY = "Palette Transfer"
+    CATEGORY = "Color Transfer/Palette Transfer"
 
     def color_transfer(self, image, target_colors, blend_mode, blend_ratio, softness):
         """
@@ -531,7 +531,7 @@ class PaletteTransferReinhard(ComfyNodeABC):
 
     RETURN_TYPES = (IO.IMAGE,)
     FUNCTION = "color_transfer"
-    CATEGORY = "Palette Transfer"
+    CATEGORY = "Color Transfer/Palette Transfer"
 
     def color_transfer(self, image, target_colors):
         if len(target_colors) == 0:
@@ -596,7 +596,7 @@ class PalleteTransferClustering(ComfyNodeABC):
 
     RETURN_TYPES = (IO.IMAGE,)
     FUNCTION = "color_transfer"
-    CATEGORY = "Palette Transfer"
+    CATEGORY = "Color Transfer/Palette Transfer"
 
     def color_transfer(self, image, target_colors, palette_extension_method, palette_extension_points, gaussian_blur):
         if len(target_colors) == 0:
@@ -635,7 +635,7 @@ class PaletteTransferNode(ComfyNodeABC):
 
     RETURN_TYPES = (IO.IMAGE,)
     FUNCTION = "color_transfer"
-    CATEGORY = "Palette Transfer"
+    CATEGORY = "Color Transfer/Palette Transfer"
 
 
     def color_transfer(self, image, target_colors, color_space, cluster_method, distance_method, gaussian_blur):
@@ -667,7 +667,7 @@ class ColorPaletteNode(ComfyNodeABC):
     RETURN_TYPES = ("COLOR_LIST", )
     RETURN_NAMES = ("Color palette", )
     FUNCTION = "color_list"
-    CATEGORY = "Palette Transfer"
+    CATEGORY = "Color Transfer/Palette Transfer"
 
     def color_list(self, color_palette):
         return (ast.literal_eval(color_palette), )
