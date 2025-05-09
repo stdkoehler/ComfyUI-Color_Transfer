@@ -26,7 +26,12 @@ from .utils import (
 
 class PaletteExtension:
     @staticmethod
-    def dense_palette(base_palette, points=5, iterations=2, extend_bw=True):
+    def dense_palette(
+        base_palette: list[tuple[int, int, int]],
+        points: int = 5,
+        iterations: int = 2,
+        extend_bw: bool = True,
+    ) -> list[tuple[int, int, int]]:
         """
         Interpolate N points between each pair of colors in the base_palette.
         Do the same for the new colors generated, for a given number of iterations to
@@ -66,7 +71,9 @@ class PaletteExtension:
         return result
 
     @staticmethod
-    def edge_based_palette(base_palette, points=5, iterations=2):
+    def edge_based_palette(
+        base_palette: list[tuple[int, int, int]], points: int = 5, iterations: int = 2
+    ) -> list[tuple[int, int, int]]:
         """
         Use Delaunay triangulation to find edges between colors in the base_colors.
         Do the same for the new colors generated, for a given number of iterations to
@@ -116,7 +123,9 @@ class PaletteExtension:
 
 class ColorSpaceConvert:
     @staticmethod
-    def convert_to_target_space(image, target_colors, color_space):
+    def convert_to_target_space(
+        image: np.ndarray, target_colors: list[tuple[int, int, int]], color_space: str
+    ) -> tuple[np.ndarray, list[tuple[int, int, int]]]:
         """Convert image and target colors to specified color space."""
         if color_space == "RGB":
             return image, target_colors
@@ -137,7 +146,7 @@ class ColorSpaceConvert:
         return converted_image, converted_colors
 
     @staticmethod
-    def convert_to_rgb(image, color_space):
+    def convert_to_rgb(image: np.ndarray, color_space: str) -> np.ndarray:
         """Convert image back to RGB color space."""
         if color_space == "RGB":
             return image
@@ -148,14 +157,14 @@ class ColorSpaceConvert:
 
 
 class ColorClustering:
-    def __init__(self, cluster_method):
+    def __init__(self, cluster_method: str):
         self.clustering_methods = {
             "Kmeans": KMeans,
             "Mini batch Kmeans": MiniBatchKMeans,
         }
         self.method = self.clustering_methods[cluster_method]
 
-    def cluster_colors(self, image, k):
+    def cluster_colors(self, image: np.ndarray, k: int) -> dict:
         """Perform color clustering on the image."""
         img_array = image.reshape((-1, 3))
         clustering_model = self.method(n_clusters=k, n_init="auto")
@@ -169,7 +178,7 @@ class ColorClustering:
 
 
 class ColorMatcher:
-    def __init__(self, distance_method):
+    def __init__(self, distance_method: str):
         self.distance_methods = {
             "Euclidean": EuclideanDistance,
             "Manhattan": ManhattanDistance,
@@ -181,8 +190,12 @@ class ColorMatcher:
         self.distance_func = self.distance_methods[distance_method]
 
     def match_colors(
-        self, detected_colors, target_colors, clustering_model, image_shape
-    ):
+        self,
+        detected_colors: np.ndarray,
+        target_colors: list[tuple[int, int, int]],
+        clustering_model: KMeans | MiniBatchKMeans,
+        image_shape: tuple[int, int, int],
+    ) -> np.ndarray:
         """Match detected colors with target colors using the specified distance method."""
         closest_colors = []
 
@@ -196,10 +209,10 @@ class ColorMatcher:
 
 
 class ImagePostProcessor:
-    def __init__(self, gaussian_blur=0):
+    def __init__(self, gaussian_blur: int = 0):
         self.gaussian_blur = gaussian_blur
 
-    def process_image(self, image):
+    def process_image(self, image: np.ndarray) -> np.ndarray:
         """Apply post-processing to the image."""
         processed = np.array(image).astype(np.float32)
 
@@ -210,8 +223,13 @@ class ImagePostProcessor:
 
 
 def process_image_with_palette(
-    image, target_colors, color_space, cluster_method, distance_method, gaussian_blur
-):
+    image: list[torch.Tensor],
+    target_colors: list[tuple[int, int, int]],
+    color_space: str,
+    cluster_method: str,
+    distance_method: str,
+    gaussian_blur: int,
+) -> torch.Tensor:
     """
     Shared function to process an image with the given parameters.
     """
@@ -259,7 +277,7 @@ def process_image_with_palette(
 
 class ReferenceTransferReinhard(ComfyNodeABC):
     @classmethod
-    def INPUT_TYPES(cls):
+    def INPUT_TYPES(cls) -> dict:
         data_in = {
             "required": {
                 "image": (IO.IMAGE,),
@@ -272,7 +290,9 @@ class ReferenceTransferReinhard(ComfyNodeABC):
     FUNCTION = "color_transfer"
     CATEGORY = "Color Transfer/Reference Transfer"
 
-    def color_transfer(self, image, image_reference):
+    def color_transfer(
+        self, image: torch.Tensor, image_reference: torch.Tensor
+    ) -> tuple[torch.Tensor]:
 
         processed_images = []
 
@@ -310,7 +330,7 @@ class ReferenceTransferReinhard(ComfyNodeABC):
 
 class PaletteOptimalTransportTransfer(ComfyNodeABC):
     @classmethod
-    def INPUT_TYPES(cls):
+    def INPUT_TYPES(cls) -> dict:
         data_in = {
             "required": {
                 "image": (IO.IMAGE,),
@@ -348,13 +368,13 @@ class PaletteOptimalTransportTransfer(ComfyNodeABC):
 
     def color_transfer(
         self,
-        image,
-        target_colors,
-        palette_extension_method,
-        palette_extension_points,
-        blend_mode,
-        blend_ratio,
-    ):
+        image: torch.Tensor,
+        target_colors: list[tuple[int, int, int]],
+        palette_extension_method: str,
+        palette_extension_points: int,
+        blend_mode: str,
+        blend_ratio: float,
+    ) -> tuple[torch.Tensor]:
 
         if palette_extension_method == "Dense":
             target_colors = PaletteExtension.dense_palette(
@@ -426,7 +446,7 @@ class PaletteOptimalTransportTransfer(ComfyNodeABC):
 
 class PaletteRbfTransfer(ComfyNodeABC):
     @classmethod
-    def INPUT_TYPES(cls):
+    def INPUT_TYPES(cls) -> dict:
         data_in = {
             "required": {
                 "image": (IO.IMAGE,),
@@ -447,7 +467,13 @@ class PaletteRbfTransfer(ComfyNodeABC):
     FUNCTION = "color_transfer"
     CATEGORY = "Color Transfer/Palette Transfer"
 
-    def color_transfer(self, image, target_colors, rbf_function, epsilon):
+    def color_transfer(
+        self,
+        image: torch.Tensor,
+        target_colors: list[tuple[int, int, int]],
+        rbf_function: str,
+        epsilon: float,
+    ) -> tuple[torch.Tensor]:
         """
         Applies RBF interpolation to map image colors based on a given palette.
 
@@ -496,7 +522,7 @@ class PaletteRbfTransfer(ComfyNodeABC):
 
 class PaletteSoftTransfer(ComfyNodeABC):
     @classmethod
-    def INPUT_TYPES(cls):
+    def INPUT_TYPES(cls) -> dict:
         data_in = {
             "required": {
                 "image": (IO.IMAGE,),
@@ -528,7 +554,14 @@ class PaletteSoftTransfer(ComfyNodeABC):
     FUNCTION = "color_transfer"
     CATEGORY = "Color Transfer/Palette Transfer"
 
-    def color_transfer(self, image, target_colors, blend_mode, blend_ratio, softness):
+    def color_transfer(
+        self,
+        image: torch.Tensor,
+        target_colors: list[tuple[int, int, int]],
+        blend_mode: str,
+        blend_ratio: float,
+        softness: float,
+    ) -> tuple[torch.Tensor]:
         """
         Shift image color mood towards N palette colors (soft harmonization)
 
@@ -594,7 +627,7 @@ class PaletteSoftTransfer(ComfyNodeABC):
 
 class PaletteTransferReinhard(ComfyNodeABC):
     @classmethod
-    def INPUT_TYPES(cls):
+    def INPUT_TYPES(cls) -> dict:
         data_in = {
             "required": {
                 "image": (IO.IMAGE,),
@@ -607,13 +640,17 @@ class PaletteTransferReinhard(ComfyNodeABC):
     FUNCTION = "color_transfer"
     CATEGORY = "Color Transfer/Palette Transfer"
 
-    def color_transfer(self, image, target_colors):
+    def color_transfer(
+        self, image: torch.Tensor, target_colors: list[tuple[int, int, int]]
+    ) -> tuple[torch.Tensor]:
         if len(target_colors) == 0:
             return (image,)
 
         target_colors = PaletteExtension.dense_palette(target_colors, points=3)
 
-        def create_palette_image(palette, size=(1000, 1000)):
+        def create_palette_image(
+            palette: list[tuple[int, int, int]], size: tuple[int, int] = (1000, 1000)
+        ) -> np.ndarray:
             """Creates a synthetic image from a list of RGB palette colors"""
             N = len(palette)
             width, height = size
@@ -656,7 +693,7 @@ class PaletteTransferReinhard(ComfyNodeABC):
 
 class PalleteTransferClustering(ComfyNodeABC):
     @classmethod
-    def INPUT_TYPES(cls):
+    def INPUT_TYPES(cls) -> dict:
         data_in = {
             "required": {
                 "image": (IO.IMAGE,),
@@ -688,12 +725,12 @@ class PalleteTransferClustering(ComfyNodeABC):
 
     def color_transfer(
         self,
-        image,
-        target_colors,
-        palette_extension_method,
-        palette_extension_points,
-        gaussian_blur,
-    ):
+        image: torch.Tensor,
+        target_colors: list[tuple[int, int, int]],
+        palette_extension_method: str,
+        palette_extension_points: int,
+        gaussian_blur: int,
+    ) -> tuple[torch.Tensor]:
         if len(target_colors) == 0:
             return (image,)
 
@@ -720,7 +757,7 @@ class PalleteTransferClustering(ComfyNodeABC):
 
 class PaletteTransferNode(ComfyNodeABC):
     @classmethod
-    def INPUT_TYPES(cls):
+    def INPUT_TYPES(cls) -> dict:
         data_in = {
             "required": {
                 "image": (IO.IMAGE,),
@@ -755,13 +792,13 @@ class PaletteTransferNode(ComfyNodeABC):
 
     def color_transfer(
         self,
-        image,
-        target_colors,
-        color_space,
-        cluster_method,
-        distance_method,
-        gaussian_blur,
-    ):
+        image: torch.Tensor,
+        target_colors: list[tuple[int, int, int]],
+        color_space: str,
+        cluster_method: str,
+        distance_method: str,
+        gaussian_blur: int,
+    ) -> tuple[torch.Tensor]:
         if len(target_colors) == 0:
             return (image,)
 
@@ -779,7 +816,7 @@ class PaletteTransferNode(ComfyNodeABC):
 
 class ColorPaletteNode(ComfyNodeABC):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(s) -> dict:
         return {
             "required": {
                 "color_palette": (
@@ -797,5 +834,5 @@ class ColorPaletteNode(ComfyNodeABC):
     FUNCTION = "color_list"
     CATEGORY = "Color Transfer/Palette Transfer"
 
-    def color_list(self, color_palette):
+    def color_list(self, color_palette: str) -> tuple[list[tuple[int, int, int]]]:
         return (ast.literal_eval(color_palette),)
