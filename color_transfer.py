@@ -348,7 +348,7 @@ class PaletteOptimalTransportTransfer(ComfyNodeABC):
                         "default": 5,
                     },
                 ),
-                "blend_mode": (["original", "grayscale"], {"default": "original"}),
+                "blend_mode": (["Original", "Grayscale"], {"default": "Original"}),
                 "blend_ratio": (
                     IO.FLOAT,
                     {
@@ -422,12 +422,12 @@ class PaletteOptimalTransportTransfer(ComfyNodeABC):
                 transport_plan, axis=1, keepdims=True
             )
 
-            if blend_mode == "original":
+            if blend_mode == "Original":
                 # Blend between original and mapped colors
                 recolored_pixels = (
                     1 - blend_ratio
                 ) * pixels + blend_ratio * mapped_centroids[pixel_labels]
-            elif blend_mode == "grayscale":
+            elif blend_mode == "Grayscale":
                 gray = color.rgb2gray(source)
                 gray_rgb = np.stack([gray] * 3, axis=-1)
                 gray_pixels = gray_rgb.reshape(-1, 3)
@@ -527,7 +527,7 @@ class PaletteSoftTransfer(ComfyNodeABC):
             "required": {
                 "image": (IO.IMAGE,),
                 "target_colors": ("COLOR_LIST",),
-                "blend_mode": (["original", "grayscale"], {"default": "original"}),
+                "blend_mode": (["Original", "Grayscale"], {"default": "Original"}),
                 "blend_ratio": (
                     IO.FLOAT,
                     {
@@ -600,10 +600,10 @@ class PaletteSoftTransfer(ComfyNodeABC):
                 weights.T, palette_lab, axes=(1, 0)
             )  # shape: (N_pixels, 3)
 
-            if blend_mode == "original":
+            if blend_mode == "Original":
                 # Blend between original and projected colors
                 blended = (1 - blend_ratio) * pixels + blend_ratio * projected
-            elif blend_mode == "grayscale":
+            elif blend_mode == "Grayscale":
                 gray = color.rgb2gray(source)  # shape: (H, W)
                 gray_rgb = np.stack([gray] * 3, axis=-1)  # shape: (H, W, 3)
                 # Convert grayscale RGB to Lab (so all blending happens in Lab)
